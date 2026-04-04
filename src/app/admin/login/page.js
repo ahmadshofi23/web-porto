@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { authService } from '@/services/authService'
 import Button from '@/components/ui/Button'
 import GlassCard from '@/components/ui/GlassCard'
-import { useAuth } from '@/hooks/useAuth'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -13,9 +12,6 @@ export default function LoginPage() {
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  
-  // Custom hook to handle session check
-  useAuth(false)
 
   const handleLogin = async (e) => {
     e.preventDefault()

@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { projectService } from '@/services/projectService'
 import Button from '@/components/ui/Button'
 import GlassCard from '@/components/ui/GlassCard'
-import { HiX } from 'react-icons/hi'
+import { HiX, HiUpload, HiTrash } from 'react-icons/hi'
+import { toast } from 'react-hot-toast'
 
 export default function ProjectForm({ project, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
@@ -16,8 +17,11 @@ export default function ProjectForm({ project, onClose, onSuccess }) {
     link_demo: '',
     link_repo: '',
   })
+  const [imageFile, setImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     if (project) {
@@ -25,6 +29,9 @@ export default function ProjectForm({ project, onClose, onSuccess }) {
         ...project,
         tech_stack: project.tech_stack ? project.tech_stack.join(', ') : '',
       })
+      if (project.image_url) {
+        setImagePreview(project.image_url)
+      }
     }
   }, [project])
 
@@ -33,25 +40,52 @@ export default function ProjectForm({ project, onClose, onSuccess }) {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
+  const handleFileChange = (e) => {
+     const file = e.target.files[0]
+     if (file) {
+       setImageFile(file)
+       setImagePreview(URL.createObjectURL(file))
+     }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
-    const payload = {
-      ...formData,
-      tech_stack: formData.tech_stack.split(',').map((s) => s.trim()).filter(Boolean),
-    }
-
     try {
+      let finalImageUrl = formData.image_url
+      
+      // Upload new image if selected
+      if (imageFile) {
+        const uploadToast = toast.loading('Uploading image...')
+        try {
+          finalImageUrl = await projectService.uploadImage(imageFile)
+          toast.success('Image uploaded successfully', { id: uploadToast })
+        } catch (err) {
+          toast.error('Image upload failed', { id: uploadToast })
+          throw err
+        }
+      }
+
+      const payload = {
+        ...formData,
+        image_url: finalImageUrl,
+        tech_stack: formData.tech_stack.split(',').map((s) => s.trim()).filter(Boolean),
+      }
+
+      const actionToast = toast.loading(project ? 'Updating project...' : 'Creating project...')
       if (project) {
         await projectService.update(project.id, payload)
+        toast.success('Project updated!', { id: actionToast })
       } else {
         await projectService.create(payload)
+        toast.success('Project created!', { id: actionToast })
       }
       onSuccess()
     } catch (err) {
-      setError(err.message)
+       setError(err.message)
+       toast.error(err.message)
     } finally {
       setLoading(false)
     }
@@ -113,14 +147,32 @@ export default function ProjectForm({ project, onClose, onSuccess }) {
               />
             </div>
 
-            <div>
-              <label className="block text-slate-400 text-sm font-medium mb-2">Image URL</label>
+            <div className="md:col-span-2">
+              <label className="block text-slate-400 text-sm font-medium mb-2">Project Thumbnail</label>
+              <div 
+                onClick={() => fileInputRef.current.click()}
+                className="w-full h-48 rounded-xl border-2 border-dashed border-white/10 bg-slate-900/50 flex flex-col items-center justify-center cursor-pointer hover:border-brand/50 transition-all overflow-hidden relative group"
+              >
+                {imagePreview ? (
+                  <>
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-2">
+                       <HiUpload /> Change Image
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <HiUpload className="text-3xl text-slate-500 mb-2" />
+                    <span className="text-slate-500 text-sm">Click to upload image</span>
+                  </>
+                )}
+              </div>
               <input
-                name="image_url"
-                value={formData.image_url}
-                onChange={handleChange}
-                className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand transition-colors"
-                placeholder="https://..."
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept="image/*"
               />
             </div>
 
@@ -146,7 +198,7 @@ export default function ProjectForm({ project, onClose, onSuccess }) {
               />
             </div>
 
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-slate-400 text-sm font-medium mb-2">Repository Link</label>
               <input
                 name="link_repo"
@@ -159,7 +211,7 @@ export default function ProjectForm({ project, onClose, onSuccess }) {
 
             <div className="md:col-span-2 flex gap-4 pt-4">
               <Button type="submit" className="flex-1 py-4" disabled={loading}>
-                {loading ? 'Saving...' : project ? 'Update Project' : 'Publish Project'}
+                {loading ? 'Processing...' : project ? 'Update Project' : 'Publish Project'}
               </Button>
               <Button variant="glass" onClick={onClose} className="px-8 py-4">
                 Cancel
