@@ -48,15 +48,32 @@ export const projectService = {
   },
 
   async uploadImage(file) {
+    // Validasi tipe file
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error(`Tipe file tidak diizinkan. Gunakan JPG, PNG, atau WebP.`)
+    }
+    
+    // Validasi ukuran (max 5MB)
+    const maxSize = 5 * 1024 * 1024 // 5 MB
+    if (file.size > maxSize) {
+      throw new Error(`Ukuran file terlalu besar. Maksimum 5MB.`)
+    }
+
     const fileExt = file.name.split('.').pop()
     const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
     const filePath = `projects/${fileName}`
 
     const { error: uploadError } = await supabase.storage
       .from('portfolio-assets')
-      .upload(filePath, file)
+      .upload(filePath, file, { upsert: false })
 
-    if (uploadError) throw uploadError
+    if (uploadError) {
+      if (uploadError.message === 'Bucket not found') {
+        throw new Error('Storage bucket "portfolio-assets" belum dibuat di Supabase. Silakan buat secara manual di Dashboard.')
+      }
+      throw uploadError
+    }
 
     const { data: { publicUrl } } = supabase.storage
       .from('portfolio-assets')
